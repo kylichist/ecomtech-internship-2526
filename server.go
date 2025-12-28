@@ -100,7 +100,10 @@ func (ds *TaskStore) UpdateTask(id int, updated Task) (Task, error) {
 		log.Printf("[UpdateTask] error: %v", err)
 		return Task{}, err
 	}
-	ds.tasks[id] = updated
+	task.Title = updated.Title
+	task.Description = updated.Description
+	task.Status = updated.Status
+	ds.tasks[id] = task
 	ds.mutex.Unlock()
 	return task, nil
 }
