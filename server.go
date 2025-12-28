@@ -10,6 +10,7 @@ import (
 	"sync"
 )
 
+// TaskStatus Статус задачи
 type TaskStatus string
 
 const (
@@ -18,10 +19,12 @@ const (
 	StatusCompleted  TaskStatus = "completed"
 )
 
+// IsValid Проверка валидности статуса задачи (что он один из предопределённых)
 func (s TaskStatus) IsValid() bool {
 	return s == StatusNotStarted || s == StatusInProgress || s == StatusCompleted
 }
 
+// Task Структура задачи
 type Task struct {
 	ID          int        `json:"id"`
 	Title       string     `json:"title"`
@@ -29,11 +32,13 @@ type Task struct {
 	Status      TaskStatus `json:"status"`
 }
 
+// Preprocess Препроцессинг данных задачи (обрезка trailing & leading spaces)
 func (t *Task) Preprocess() {
 	t.Title = strings.TrimSpace(t.Title)
 	t.Description = strings.TrimSpace(t.Description)
 }
 
+// Validate Валидация корректности данных задачи
 func (t *Task) Validate() error {
 	if t.ID <= 0 {
 		return fmt.Errorf("id must be a positive integer")
@@ -47,18 +52,21 @@ func (t *Task) Validate() error {
 	return nil
 }
 
+// TaskStore Хранилище данных
 type TaskStore struct {
 	mutex sync.RWMutex
 	tasks map[int]Task
 }
 
+// NewTaskStore Создание нового хранилища задач
 func NewTaskStore() *TaskStore {
 	return &TaskStore{tasks: make(map[int]Task)}
 }
 
+// CreateTask Создает новую задачу в хранилище
 func (ds *TaskStore) CreateTask(task Task) error {
 	ds.mutex.Lock()
-	if _, exists := ds.tasks[task.ID]; exists {
+	if _, exists := ds.tasks[task.ID]; exists { // задача с таким ID уже есть
 		ds.mutex.Unlock()
 		err := fmt.Errorf("task with id %d already exists", task.ID)
 		log.Printf("[CreateTask] error: %v", err)
@@ -69,6 +77,7 @@ func (ds *TaskStore) CreateTask(task Task) error {
 	return nil
 }
 
+// GetAllTasks Возвращает все задачи из хранилища
 func (ds *TaskStore) GetAllTasks() []Task {
 	ds.mutex.RLock()
 	list := make([]Task, 0, len(ds.tasks))
@@ -79,11 +88,12 @@ func (ds *TaskStore) GetAllTasks() []Task {
 	return list
 }
 
+// GetTask Возвращает задачу из хранилища по ID
 func (ds *TaskStore) GetTask(id int) (Task, error) {
 	ds.mutex.RLock()
 	task, ok := ds.tasks[id]
 	ds.mutex.RUnlock()
-	if !ok {
+	if !ok { // задача с таким ID не найдена
 		err := fmt.Errorf("task with id %d not found", id)
 		log.Printf("[GetTask] error: %v", err)
 		return Task{}, err
@@ -91,15 +101,17 @@ func (ds *TaskStore) GetTask(id int) (Task, error) {
 	return task, nil
 }
 
+// UpdateTask Обновляет задачу в хранилище по ID
 func (ds *TaskStore) UpdateTask(id int, updated Task) (Task, error) {
 	ds.mutex.Lock()
 	task, ok := ds.tasks[id]
-	if !ok {
+	if !ok { // задача с таким ID не найдена
 		ds.mutex.Unlock()
 		err := fmt.Errorf("task with id %d not found", id)
 		log.Printf("[UpdateTask] error: %v", err)
 		return Task{}, err
 	}
+	// обновляем поля задачи
 	task.Title = updated.Title
 	task.Description = updated.Description
 	task.Status = updated.Status
@@ -108,10 +120,11 @@ func (ds *TaskStore) UpdateTask(id int, updated Task) (Task, error) {
 	return task, nil
 }
 
+// DeleteTask Удаляет задачу из хранилища по ID
 func (ds *TaskStore) DeleteTask(id int) error {
 	ds.mutex.Lock()
 	_, ok := ds.tasks[id]
-	if !ok {
+	if !ok { // задача с таким ID не найдена
 		ds.mutex.Unlock()
 		err := fmt.Errorf("task with id %d not found", id)
 		log.Printf("[DeleteTask] error: %v", err)
@@ -122,22 +135,23 @@ func (ds *TaskStore) DeleteTask(id int) error {
 	return nil
 }
 
+// todosHandler Обработчик эндпоинта /todos
 func todosHandler(ts *TaskStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
-		case http.MethodPost:
+		case http.MethodPost: // POST /todos
 			var t Task
 			if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
 				log.Printf("[todosHandler] error: Decoding: %v", err)
 				http.Error(w, "invalid JSON", http.StatusBadRequest)
 				return
 			}
+			t.Preprocess()
 			if err := t.Validate(); err != nil {
 				log.Printf("[todosHandler] error: Validation: %v", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			t.Preprocess()
 			if err := ts.CreateTask(t); err != nil {
 				log.Printf("[todosHandler] error: Creating task: %v", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
@@ -145,7 +159,7 @@ func todosHandler(ts *TaskStore) http.HandlerFunc {
 			}
 			w.WriteHeader(http.StatusCreated)
 
-		case http.MethodGet:
+		case http.MethodGet: // GET /todos
 			tasks := ts.GetAllTasks()
 			w.Header().Set("Content-Type", "application/json")
 			if err := json.NewEncoder(w).Encode(tasks); err != nil {
@@ -160,6 +174,7 @@ func todosHandler(ts *TaskStore) http.HandlerFunc {
 	}
 }
 
+// todoHandler Обработчик эндпоинта /todos/{id}
 func todoHandler(ts *TaskStore) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		idStr := r.PathValue("id")
@@ -176,7 +191,7 @@ func todoHandler(ts *TaskStore) http.HandlerFunc {
 		}
 
 		switch r.Method {
-		case http.MethodGet:
+		case http.MethodGet: // GET /todos/{id}
 			task, err := ts.GetTask(id)
 			if err != nil {
 				log.Printf("[todoHandler] error: Getting task: %v", err)
@@ -189,7 +204,7 @@ func todoHandler(ts *TaskStore) http.HandlerFunc {
 				return
 			}
 
-		case http.MethodPut:
+		case http.MethodPut: // PUT /todos/{id}
 			var t Task
 			if err := json.NewDecoder(r.Body).Decode(&t); err != nil {
 				log.Printf("[todoHandler] error: Decoding: %v", err)
@@ -214,7 +229,7 @@ func todoHandler(ts *TaskStore) http.HandlerFunc {
 				return
 			}
 
-		case http.MethodDelete:
+		case http.MethodDelete: // DELETE /todos/{id}
 			if err := ts.DeleteTask(id); err != nil {
 				log.Printf("[todoHandler] error: Deleting task: %v", err)
 				http.Error(w, err.Error(), http.StatusNotFound)
@@ -228,7 +243,9 @@ func todoHandler(ts *TaskStore) http.HandlerFunc {
 		}
 	}
 }
-func healthzHandler(w http.ResponseWriter, r *http.Request) {
+
+// healthzHandler Обработчик эндпоинта /healthz (проверка статуса сервера)
+func healthzHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
