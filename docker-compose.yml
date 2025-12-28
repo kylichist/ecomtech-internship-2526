@@ -4,7 +4,8 @@ services:
     ports:
       - "8080:8080"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
-      interval: 1m30s
+      test: [ "CMD", "curl", "-f", "http://localhost:8080/healthz" ]
+      interval: 0s
       timeout: 10s
-      retries: 3
+      retries: 1
+      start_period: 3s
