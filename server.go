@@ -54,7 +54,7 @@ func (t *Task) Validate() error {
 
 // TaskStore Хранилище данных
 type TaskStore struct {
-	mutex sync.RWMutex
+	mutex sync.RWMutex // Мьютекс для защиты от гонок данных
 	tasks map[int]Task
 }
 

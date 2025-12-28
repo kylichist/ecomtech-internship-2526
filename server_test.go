@@ -193,10 +193,10 @@ func TestDeleteTask(t *testing.T) {
 		t.Errorf("expected 404 after delete, got %d", resp2.StatusCode)
 	}
 	if err := resp.Body.Close(); err != nil {
-		return
+		t.Fatalf("failed to close response body: %v", err)
 	}
 	if err := resp2.Body.Close(); err != nil {
-		return
+		t.Fatalf("failed to close response body: %v", err)
 	}
 	ts.Close()
 }
